@@ -167,13 +167,15 @@ namespace CSharpProjMerge.Utilities
             if (reference == null)
                 throw new ArgumentNullException(nameof(reference));
 
-            foreach (var existing in References)
+            if (reference.ParentNode != null)
             {
-                if (existing.GetInclude().EqualsIgnoreCase(reference.GetInclude()))
-                    return existing;
+                foreach (var existing in References)
+                {
+                    if (existing.GetInclude().EqualsIgnoreCase(reference.GetInclude()))
+                        return existing;
+                }
             }
 
-            //var package = reference.Name.EqualsIgnoreCase("PackageReference");
             var targetGroup = Project.SelectSingleNode(ProjectPrefix + "ItemGroup/" + ProjectPrefix + reference.Name + "/..", NamespaceManager);
             if (targetGroup == null)
             {
@@ -187,9 +189,12 @@ namespace CSharpProjMerge.Utilities
         }
 
         // can't use ImportNode because we don't want imported namespace, we want to use ours
-        private XmlElement ImportElement(XmlElement input)
+        protected virtual XmlElement ImportElement(XmlElement input, string localName = null)
         {
-            var clone = Document.CreateElement(input.LocalName, ProjectNamespaceUri);
+            if (input == null)
+                throw new ArgumentNullException(nameof(input));
+
+            var clone = Document.CreateElement(localName ?? input.LocalName, ProjectNamespaceUri);
             foreach (XmlAttribute att in input.Attributes)
             {
                 // don't use att's namespace
@@ -215,15 +220,44 @@ namespace CSharpProjMerge.Utilities
             return clone;
         }
 
+        public virtual bool IsReferenceInclude(XmlElement include)
+        {
+            if (include == null)
+                return false;
+
+            return include.Name == "Reference" || include.Name == "PackageReference";
+        }
+
+        public virtual bool IsAssemblyInfo(XmlElement include)
+        {
+            if (include == null)
+                return false;
+
+            var path = include.GetInclude();
+            if (path != null)
+            {
+                var name = Path.GetFileNameWithoutExtension(path);
+                if (name.EqualsIgnoreCase("assemblyinfo") || name.EndsWith(".assemblyinfo", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                if (name.EndsWith(".assemblyattributes", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         public virtual XmlElement EnsureInclude(XmlElement include)
         {
             if (include == null)
                 throw new ArgumentNullException(nameof(include));
 
-            foreach (var existing in ItemGroupIncludes)
+            if (include.ParentNode != null)
             {
-                if (existing.GetInclude().EqualsIgnoreCase(include.GetInclude()))
-                    return existing;
+                foreach (var existing in ItemGroupIncludes)
+                {
+                    if (existing.GetInclude().EqualsIgnoreCase(include.GetInclude()))
+                        return existing;
+                }
             }
 
             var targetGroup = Project.SelectSingleNode(ProjectPrefix + "ItemGroup/" + ProjectPrefix + include.Name + "/..", NamespaceManager);
@@ -303,7 +337,7 @@ namespace CSharpProjMerge.Utilities
             {
                 var doc = new XmlDocument();
                 doc.Load(filePath);
-                var netCore = doc.DocumentElement?.GetAttribute("Sdk").EqualsIgnoreCase("Microsoft.NET.Sdk");
+                var netCore = doc.DocumentElement?.GetAttribute("Sdk")?.StartsWith("Microsoft.NET.Sdk", StringComparison.OrdinalIgnoreCase);
                 if (netCore == true)
                     return new NetCoreProject(filePath);
 

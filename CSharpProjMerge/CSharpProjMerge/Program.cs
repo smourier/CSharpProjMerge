@@ -58,30 +58,33 @@ namespace CSharpProjMerge
         static void Merge(string inputFilePath, string outputFilePath)
         {
             var proj = MsBuildProject.FromFilePath(inputFilePath);
+            var netCore = proj is NetCoreProject;
             foreach (var include in proj.ItemGroupIncludes)
             {
+                if (proj.IsAssemblyInfo(include))
+                    continue;
+
                 fixInclude(proj, include);
+                if (netCore)
+                {
+                    proj.EnsureInclude(include);
+                }
             }
 
             foreach (var rp in proj.AllReferencedProjects)
             {
-                foreach (var pr in rp.References)
+                foreach (var include in rp.References)
                 {
-                    proj.EnsureReference(pr);
+                    proj.EnsureReference(include);
                 }
 
                 foreach (var include in rp.ItemGroupIncludes)
                 {
-                    var path = include.GetInclude();
-                    if (path != null)
-                    {
-                        var name = Path.GetFileNameWithoutExtension(path);
-                        if (name.EqualsIgnoreCase("assemblyinfo") || name.EndsWith(".assemblyinfo", StringComparison.OrdinalIgnoreCase))
-                            continue;
+                    if (proj.IsReferenceInclude(include))
+                        continue;
 
-                        if (name.EndsWith(".assemblyattributes", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
+                    if (proj.IsAssemblyInfo(include))
+                        continue;
 
                     var newInclude = proj.EnsureInclude(include);
                     fixInclude(rp, newInclude);
@@ -110,10 +113,6 @@ namespace CSharpProjMerge
 
             void fixInclude(MsBuildProject project, XmlElement includeElement)
             {
-                if (includeElement.Name == "PackageReference" ||
-                    includeElement.Name == "Reference")
-                    return;
-
                 var includePath = includeElement.GetInclude();
                 Console.WriteLine(includeElement.Name + ": " + includePath);
                 var path = Path.GetFullPath(Path.Combine(project.ProjectDirectoryPath, includePath));

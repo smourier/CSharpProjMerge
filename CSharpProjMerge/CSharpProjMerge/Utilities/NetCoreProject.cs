@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Xml;
 
@@ -7,6 +8,14 @@ namespace CSharpProjMerge.Utilities
     // https://docs.microsoft.com/en-us/dotnet/core/project-sdk/overview
     public class NetCoreProject : MsBuildProject
     {
+        private static readonly HashSet<string> _fxRefs = new HashSet<string> {
+            "System",
+            "System.Core",
+            "System.Drawing",
+            "System.Windows.Forms",
+            "Microsoft.CSharp",
+        };
+
         public NetCoreProject(string filePath)
             : base(filePath)
         {
@@ -39,6 +48,38 @@ namespace CSharpProjMerge.Utilities
                     }
                 }
             }
+        }
+
+        protected virtual bool ChangeToPackageReference(XmlElement reference)
+        {
+            if (reference == null)
+                throw new ArgumentNullException(nameof(reference));
+
+            var include = reference.GetInclude();
+            if (_fxRefs.Contains(include))
+                return false;
+
+            return true;
+        }
+
+        public override XmlElement EnsureReference(XmlElement reference)
+        {
+            if (reference == null)
+                throw new ArgumentNullException(nameof(reference));
+
+            if (reference.Name == "Reference")
+            {
+                var clone = ImportElement(reference, "PackageReference");
+                if (!ChangeToPackageReference(clone))
+                    return null;
+
+                return base.EnsureReference(clone);
+            }
+
+            if (_fxRefs.Contains(reference.GetInclude()))
+                return null;
+
+            return base.EnsureReference(reference);
         }
     }
 }
