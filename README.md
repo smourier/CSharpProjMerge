@@ -1,2 +1,2 @@
 # CSharpProjMerge
-A tool to merge C# projects, like ILMerge/ILRepack but at project level to avoid weird issues.
+A console utility to merge a .NET project and referenced .NET projects into one unique project.
